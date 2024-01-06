@@ -1,1 +1,1 @@
-use SQLAlchemy and PostgreSQL later
+use PostgreSQL later
