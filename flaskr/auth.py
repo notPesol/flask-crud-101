@@ -10,6 +10,8 @@ from flaskr.db import get_db
 from .common.dto import ResponseDTO
 from .common.enum import Message
 
+from .new_db import new_db, User
+
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 @bp.get('/me')
@@ -110,19 +112,15 @@ def change_password():
 def get_by_id(id: int):
     responseDTO = ResponseDTO()
     
-    db = get_db()
     try:
-        user = db.execute("SELECT id, username FROM user WHERE id = ?",
-            (id,)).fetchone()
-        
-        if user is None:
-            responseDTO.status = 404
-            raise Exception(f"User #{id} not found")
-        
-        responseDTO.data = dict(user)
+        user =  new_db.session.get_one(User, id)
+        user_dict = {column: getattr(user, column) for column in User.__table__.columns.keys()}
+        print(user_dict)
+        responseDTO.data = user_dict
     except Exception as e:
         responseDTO.data = str(e)
         responseDTO.message = Message.ERROR.value
+        responseDTO.status = 404
         
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
