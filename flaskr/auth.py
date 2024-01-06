@@ -115,7 +115,6 @@ def get_by_id(id: int):
     try:
         user =  new_db.session.get_one(User, id)
         user_dict = {column: getattr(user, column) for column in User.__table__.columns.keys()}
-        print(user_dict)
         responseDTO.data = user_dict
     except Exception as e:
         responseDTO.data = str(e)
@@ -144,15 +143,11 @@ def get():
     
     responseDTO = ResponseDTO()
     
-    db = get_db()
     try:
-        result = db.execute("SELECT count(id) as count from user").fetchone()
-        responseDTO.count = result['count']
+        responseDTO.count = new_db.session.query(User).count()
         
-        users = db.execute("SELECT id, username FROM user LIMIT ? OFFSET ?",
-            (limit, offset)).fetchall()
-        
-        user_list = [dict(user) for user in users]
+        users = new_db.session.query(User.id, User.username).limit(limit).offset(offset)
+        user_list = [{'id': user.id, 'username': user.username} for user in users]
         responseDTO.data = user_list
     except Exception as e:
         responseDTO.data = str(e)
