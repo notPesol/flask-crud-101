@@ -4,6 +4,7 @@ from flask import Flask
 from flask_jwt_extended import JWTManager
 from . import db
 from . import auth
+from .new_db import new_db
 
 from dotenv import load_dotenv
 
@@ -20,6 +21,9 @@ def create_app(test_config=None):
     app.config.from_mapping(
         SECRET_KEY='dev',
         DATABASE=os.path.join(app.instance_path, 'flaskr.sqlite'),
+        
+        SQLALCHEMY_DATABASE_URI=os.getenv('DATABASE_URL', 'sqlite:///' + os.path.join(app.instance_path, 'flaskr.sqlite')),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
     )
 
     if test_config is None:
@@ -36,7 +40,12 @@ def create_app(test_config=None):
         pass
 
     db.init_app(app)
+    new_db.init_app(app)
     
     app.register_blueprint(auth.bp)
+    
+    with app.app_context():
+        new_db.create_all()
+
 
     return app
