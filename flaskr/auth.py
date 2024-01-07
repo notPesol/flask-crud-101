@@ -12,6 +12,8 @@ from .common.enum import Message
 
 from .new_db import new_db, User
 
+from sqlalchemy import select
+
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 @bp.get('/me')
@@ -113,9 +115,12 @@ def get_by_id(id: int):
     responseDTO = ResponseDTO()
     
     try:
-        user =  new_db.session.get_one(User, id)
-        user_dict = {column: getattr(user, column) for column in User.__table__.columns.keys()}
-        responseDTO.data = user_dict
+        user = new_db.session.execute(select(User.id, User.username).where(User.id == id)).first()
+        
+        if user is None:
+            raise Exception(f"User #{id} not found")
+        
+        responseDTO.data = user._asdict()
     except Exception as e:
         responseDTO.data = str(e)
         responseDTO.message = Message.ERROR.value
