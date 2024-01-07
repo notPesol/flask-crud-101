@@ -1,6 +1,4 @@
 import datetime
-import functools
-from sqlite3 import Cursor
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
@@ -11,6 +9,8 @@ from .common.dto import ResponseDTO
 from .common.enum import Message
 
 from .new_db import new_db, User
+
+from sqlalchemy import select, update, delete
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -44,22 +44,23 @@ def register():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:
-        db = get_db()
         try:
-            cursor = db.execute("INSERT INTO user (username, password) VALUES (?, ?)",
-                (username, generate_password_hash(password, method='pbkdf2')))
-            db.commit()
-            
-            user_id = cursor.lastrowid
+            new_user = User()
+            new_user.username = username
+            new_user.password = hash_password(password)
+    
+            new_db.session.add(new_user)
+            new_db.session.commit()
+        
+            new_user = get_user_by_id(new_user.id)
+                        
+            responseDTO.data = new_user._asdict()
 
-            user = db.execute("SELECT id, username FROM user WHERE id = ?", (user_id,)).fetchone()
-            responseDTO.data = dict(user)
-        except db.IntegrityError:
+        except Exception:
             responseDTO.data = f"User {username} is already registered"
             responseDTO.message = Message.ERROR.value
             responseDTO.status = 409
         
-    
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
 @bp.put('/')
@@ -85,23 +86,23 @@ def change_password():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:
-        db = get_db()
         try:
             user = get_by_username(username)
             
             if user is None:
                 responseDTO.status = 404
                 raise Exception('Incorrect username')
-            elif not check_password_hash(user['password'], old_password):
+            elif not check_password_hash(user._asdict()['password'], old_password):
                 responseDTO.status = 401
                 raise Exception('Incorrect old password')
             
-            db.execute("UPDATE user SET username = ?, password = ? WHERE username = ?",
-                (username, generate_password_hash(new_password, method='pbkdf2'), username))
-            db.commit()
+            stmt = update(User).where(User.username == username).values(
+                password=hash_password(new_password)).returning(User.id, User.username)
 
-            user = db.execute("SELECT id, username FROM user WHERE username = ?", (username,)).fetchone()
-            responseDTO.data = dict(user)
+            user = new_db.session.execute(stmt).first()
+            new_db.session.commit()
+            
+            responseDTO.data = user._asdict()
         except Exception as e:
             responseDTO.data = str(e)
             responseDTO.message = Message.ERROR.value
@@ -113,9 +114,12 @@ def get_by_id(id: int):
     responseDTO = ResponseDTO()
     
     try:
-        user =  new_db.session.get_one(User, id)
-        user_dict = {column: getattr(user, column) for column in User.__table__.columns.keys()}
-        responseDTO.data = user_dict
+        user = get_user_by_id(id=id)
+        
+        if user is None:
+            raise Exception(f"User #{id} not found")
+        
+        responseDTO.data = user._asdict()
     except Exception as e:
         responseDTO.data = str(e)
         responseDTO.message = Message.ERROR.value
@@ -126,10 +130,10 @@ def get_by_id(id: int):
 @bp.delete('/<int:id>')
 def delete_by_id(id: int):
     responseDTO = ResponseDTO()
-    
-    db = get_db()
-    db.execute("DELETE FROM user WHERE id = ?", (id,))
-    db.commit()
+
+    stmt = delete(User).where(User.id == id).returning(User.id, User.username)
+    new_db.session.execute(stmt)
+    new_db.session.commit()
     
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
@@ -176,10 +180,10 @@ def login():
         responseDTO.status = 400
     else:        
         user = get_by_username(username)
-    
+        
         if user is None:
             error = 'Incorrect username'
-        elif not check_password_hash(user['password'], password):
+        elif not check_password_hash(user._asdict()['password'], password):
             error = 'Incorrect password.'          
         
         if error:
@@ -187,7 +191,7 @@ def login():
             responseDTO.message = Message.ERROR.value  
             responseDTO.status = 401
         else:
-            dict_user = dict(user)
+            dict_user = user._asdict()
             dict_user.pop('password')
             
             access_token = create_access_token(identity=dict_user, expires_delta=datetime.timedelta(days=1))
@@ -196,6 +200,11 @@ def login():
     return jsonify(responseDTO.to_dict()), responseDTO.status
     
     
-def get_by_username(username: str) -> Cursor:
-    db = get_db()
-    return db.execute("SELECT * FROM user WHERE username = ?", (username,)).fetchone()
+def get_by_username(username: str):
+    return new_db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
+
+def get_user_by_id(id: int):
+    return new_db.session.execute(select(User.id, User.username).where(User.id==id)).first()
+
+def hash_password(password: str):
+    return generate_password_hash(password, method='pbkdf2')
