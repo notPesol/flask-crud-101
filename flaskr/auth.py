@@ -179,7 +179,7 @@ def login():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:        
-        user = new_db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
+        user = get_by_username(username)
         
         if user is None:
             error = 'Incorrect username'
