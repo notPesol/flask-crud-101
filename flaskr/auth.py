@@ -47,7 +47,7 @@ def register():
         try:
             new_user = User()
             new_user.username = username
-            new_user.password = generate_password_hash(password, method='pbkdf2')
+            new_user.password = hash_password(password)
     
             new_db.session.add(new_user)
             new_db.session.commit()
@@ -97,7 +97,7 @@ def change_password():
                 raise Exception('Incorrect old password')
             
             stmt = update(User).where(User.username == username).values(
-                password=generate_password_hash(new_password, method='pbkdf2')).returning(User.id, User.username)
+                password=hash_password(new_password)).returning(User.id, User.username)
 
             user = new_db.session.execute(stmt).first()
             new_db.session.commit()
@@ -205,3 +205,6 @@ def get_by_username(username: str):
 
 def get_user_by_id(id: int):
     return new_db.session.execute(select(User.id, User.username).where(User.id==id)).first()
+
+def hash_password(password: str):
+    return generate_password_hash(password, method='pbkdf2')
