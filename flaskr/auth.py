@@ -1,6 +1,4 @@
 import datetime
-import functools
-from sqlite3 import Cursor
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
@@ -12,7 +10,7 @@ from .common.enum import Message
 
 from .new_db import new_db, User
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -88,23 +86,21 @@ def change_password():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:
-        db = get_db()
         try:
             user = get_by_username(username)
             
             if user is None:
                 responseDTO.status = 404
                 raise Exception('Incorrect username')
-            elif not check_password_hash(user['password'], old_password):
+            elif not check_password_hash(user._asdict()['password'], old_password):
                 responseDTO.status = 401
                 raise Exception('Incorrect old password')
             
-            db.execute("UPDATE user SET username = ?, password = ? WHERE username = ?",
-                (username, generate_password_hash(new_password, method='pbkdf2'), username))
-            db.commit()
+            stmt = update(User).where(User.username == username).values(
+                password=generate_password_hash(new_password, method='pbkdf2')).returning(User.id, User.username)
 
-            user = db.execute("SELECT id, username FROM user WHERE username = ?", (username,)).fetchone()
-            responseDTO.data = dict(user)
+            user = new_db.session.execute(stmt).first()
+            responseDTO.data = user._asdict()
         except Exception as e:
             responseDTO.data = str(e)
             responseDTO.message = Message.ERROR.value
@@ -202,9 +198,8 @@ def login():
     return jsonify(responseDTO.to_dict()), responseDTO.status
     
     
-def get_by_username(username: str) -> Cursor:
-    db = get_db()
-    return db.execute("SELECT * FROM user WHERE username = ?", (username,)).fetchone()
+def get_by_username(username: str):
+    return new_db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
 
 def get_user_by_id(id: int):
     return new_db.session.execute(select(User.id, User.username).where(User.id==id)).first()
