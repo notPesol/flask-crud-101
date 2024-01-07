@@ -46,22 +46,23 @@ def register():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:
-        db = get_db()
         try:
-            cursor = db.execute("INSERT INTO user (username, password) VALUES (?, ?)",
-                (username, generate_password_hash(password, method='pbkdf2')))
-            db.commit()
-            
-            user_id = cursor.lastrowid
+            new_user = User()
+            new_user.username = username
+            new_user.password = generate_password_hash(password, method='pbkdf2')
+    
+            new_db.session.add(new_user)
+            new_db.session.commit()
+        
+            new_user = get_user_by_id(new_user.id)
+                        
+            responseDTO.data = new_user._asdict()
 
-            user = db.execute("SELECT id, username FROM user WHERE id = ?", (user_id,)).fetchone()
-            responseDTO.data = dict(user)
-        except db.IntegrityError:
+        except Exception:
             responseDTO.data = f"User {username} is already registered"
             responseDTO.message = Message.ERROR.value
             responseDTO.status = 409
         
-    
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
 @bp.put('/')
@@ -115,7 +116,7 @@ def get_by_id(id: int):
     responseDTO = ResponseDTO()
     
     try:
-        user = new_db.session.execute(select(User.id, User.username).where(User.id == id)).first()
+        user = get_user_by_id(id=id)
         
         if user is None:
             raise Exception(f"User #{id} not found")
@@ -204,3 +205,6 @@ def login():
 def get_by_username(username: str) -> Cursor:
     db = get_db()
     return db.execute("SELECT * FROM user WHERE username = ?", (username,)).fetchone()
+
+def get_user_by_id(id: int):
+    return new_db.session.execute(select(User.id, User.username).where(User.id==id)).first()
