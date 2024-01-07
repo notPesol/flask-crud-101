@@ -10,7 +10,7 @@ from .common.enum import Message
 
 from .new_db import new_db, User
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -100,6 +100,8 @@ def change_password():
                 password=generate_password_hash(new_password, method='pbkdf2')).returning(User.id, User.username)
 
             user = new_db.session.execute(stmt).first()
+            new_db.session.commit()
+            
             responseDTO.data = user._asdict()
         except Exception as e:
             responseDTO.data = str(e)
@@ -128,10 +130,10 @@ def get_by_id(id: int):
 @bp.delete('/<int:id>')
 def delete_by_id(id: int):
     responseDTO = ResponseDTO()
-    
-    db = get_db()
-    db.execute("DELETE FROM user WHERE id = ?", (id,))
-    db.commit()
+
+    stmt = delete(User).where(User.id == id).returning(User.id, User.username)
+    new_db.session.execute(stmt)
+    new_db.session.commit()
     
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
