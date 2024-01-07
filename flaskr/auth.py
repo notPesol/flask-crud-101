@@ -181,11 +181,11 @@ def login():
         responseDTO.message = Message.ERROR.value
         responseDTO.status = 400
     else:        
-        user = get_by_username(username)
-    
+        user = new_db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
+        
         if user is None:
             error = 'Incorrect username'
-        elif not check_password_hash(user['password'], password):
+        elif not check_password_hash(user._asdict()['password'], password):
             error = 'Incorrect password.'          
         
         if error:
@@ -193,7 +193,7 @@ def login():
             responseDTO.message = Message.ERROR.value  
             responseDTO.status = 401
         else:
-            dict_user = dict(user)
+            dict_user = user._asdict()
             dict_user.pop('password')
             
             access_token = create_access_token(identity=dict_user, expires_delta=datetime.timedelta(days=1))
