@@ -4,11 +4,10 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from flaskr.db import get_db
 from .common.dto import ResponseDTO
 from .common.enum import Message
 
-from .new_db import new_db, User
+from .db import db, User
 
 from sqlalchemy import select, update, delete
 
@@ -49,8 +48,8 @@ def register():
             new_user.username = username
             new_user.password = hash_password(password)
     
-            new_db.session.add(new_user)
-            new_db.session.commit()
+            db.session.add(new_user)
+            db.session.commit()
         
             new_user = get_user_by_id(new_user.id)
                         
@@ -99,8 +98,8 @@ def change_password():
             stmt = update(User).where(User.username == username).values(
                 password=hash_password(new_password)).returning(User.id, User.username)
 
-            user = new_db.session.execute(stmt).first()
-            new_db.session.commit()
+            user = db.session.execute(stmt).first()
+            db.session.commit()
             
             responseDTO.data = user._asdict()
         except Exception as e:
@@ -132,8 +131,8 @@ def delete_by_id(id: int):
     responseDTO = ResponseDTO()
 
     stmt = delete(User).where(User.id == id).returning(User.id, User.username)
-    new_db.session.execute(stmt)
-    new_db.session.commit()
+    db.session.execute(stmt)
+    db.session.commit()
     
     return jsonify(responseDTO.to_dict()), responseDTO.status
 
@@ -148,9 +147,9 @@ def get():
     responseDTO = ResponseDTO()
     
     try:
-        responseDTO.count = new_db.session.query(User).count()
+        responseDTO.count = db.session.query(User).count()
         
-        users = new_db.session.query(User.id, User.username).limit(limit).offset(offset)
+        users = db.session.query(User.id, User.username).limit(limit).offset(offset)
         user_list = [{'id': user.id, 'username': user.username} for user in users]
         responseDTO.data = user_list
     except Exception as e:
@@ -201,10 +200,10 @@ def login():
     
     
 def get_by_username(username: str):
-    return new_db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
+    return db.session.execute(select(User.id, User.username, User.password).where(User.username==username)).first()
 
 def get_user_by_id(id: int):
-    return new_db.session.execute(select(User.id, User.username).where(User.id==id)).first()
+    return db.session.execute(select(User.id, User.username).where(User.id==id)).first()
 
 def hash_password(password: str):
     return generate_password_hash(password, method='pbkdf2')

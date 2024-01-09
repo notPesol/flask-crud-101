@@ -1,36 +1,18 @@
-import sqlite3
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-import click
-from flask import Flask, current_app, g
+from sqlalchemy import Integer, String
 
-def get_db():
-    if 'db' not in g:
-        g.db = sqlite3.connect(
-            current_app.config['DATABASE'],
-            detect_types=sqlite3.PARSE_DECLTYPES
-        )
-        g.db.row_factory = sqlite3.Row
 
-    return g.db
+class Base(DeclarativeBase):
+  pass
 
-def close_db(e=None):
-    db = g.pop('db', None)
+db = SQLAlchemy(model_class=Base)
 
-    if db is not None:
-        db.close()    
-
-def init_db():
-    db = get_db()
-
-    with current_app.open_resource('schema.sql') as f:
-        db.executescript(f.read().decode('utf8'))
-        
-@click.command('init-db')
-def init_db_command():
-    """Clear the existing data and create new tables."""
-    init_db()
-    click.echo('Initialized the database.')
+class User(db.Model):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    password: Mapped[str] = mapped_column(String, nullable=False)
     
-def init_app(app: Flask):
-    app.teardown_appcontext(close_db)
-    app.cli.add_command(init_db_command)
+    def __repr__(self) -> str:
+       return f"#{self.id} => {self.username}"
